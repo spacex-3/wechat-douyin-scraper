@@ -95,24 +95,24 @@ class DouyinPlugin(Plugin):
         logger.debug("所有重试都失败，无法获取抖音视频数据")
         return None
 
-    def download_video(self, video_url, file_path, video_size, retry_count=3):
+    def download_video(self, e_context, video_url, file_path, video_size, retry_count=3):
         """
         下载视频并确保大小不超过配置的限制
         """
         # 检查文件大小是否超过限制
+        channel = e_context["channel"]
         video_size_mb = video_size / (1024 * 1024)  # 将字节转换为MB
         if video_size_mb > self.config['limit_size']:
             logger.debug(f"视频大小 {video_size_mb}MB 超出限制 {self.config['limit_size']}MB")
-            reply = Reply(ReplyType.TEXT, f"视频大小 {video_size_mb}MB 超出限制 {self.config['limit_size']}MB")
-            e_context["reply"] = reply
+            reply = Reply(ReplyType.TEXT, f"视频大小 {video_size_mb}MB 超出限制 {self.config['limit_size']}MB")            
+            _send(channel, reply, e_context["context"])
             e_context.action = EventAction.BREAK_PASS
-            return None
 
         # 下载视频
         while retry_count >= 0:
             try:
                 # 下载视频并发送
-                response = requests.get(video_url, allow_redirects=True, stream=True)
+                response = requests.get(video_url, allow_redirects=True, stream=True, timeout=30)
                 if response.status_code != 200:
                     raise Exception(f"[douyin] 文件下载失败， status_code={response.status_code}")
                 with open(file_path, 'wb') as f:
@@ -124,9 +124,17 @@ class DouyinPlugin(Plugin):
                 logger.debug(f"下载视频出错: {e}")
                 retry_count -= 1
                 time.sleep(5)
-            else:
-                break
 
+            else:
+                # reply = Reply(ReplyType.TEXT, f"下载视频出错。")            
+                # _send(channel, reply, e_context["context"])
+                # e_context.action = EventAction.BREAK_PASS
+                break
+        else:
+            # 重试次数用尽，发送失败信息
+            reply = Reply(ReplyType.TEXT, "下载视频出错。重试次数已用尽。")            
+            _send(channel, reply, e_context["context"])
+            e_context.action = EventAction.BREAK_PASS
 
     def cleanup_assets(self):
         """
@@ -192,10 +200,10 @@ class DouyinPlugin(Plugin):
                     play_addr = []
 
                 # download_addr 直接从 video 字段中获取
-                download_addr = video_data.get('video', {}).get('download_addr', {}).get('url_list', [])
+                # download_addr = video_data.get('video', {}).get('download_addr', {}).get('url_list', [])
 
                 video_link = play_addr[0] if play_addr else None
-                download_link = download_addr[0] if download_addr else None
+                # download_link = download_addr[0] if download_addr else None
 
                 # 获取视频大小，使用 bit_rate 的第一个元素
                 video_size = bit_rate_list[0].get('play_addr', {}).get('data_size', 0) if bit_rate_list else 0
@@ -210,11 +218,9 @@ class DouyinPlugin(Plugin):
                 collect_count = statistics.get('collect_count', 0)
                 share_count = statistics.get('share_count', 0)
 
-                #下载视频
-                filename = f"{int(time.time())}-{sanitize_filename(desc).replace(' ', '')[:20]}"
-                video_path = os.path.join(self.assets_dir, f"{filename}.mp4")
-                logger.debug(f"[douyin] 下载视频，video_url={download_link}")
-                self.download_video(video_link, video_path, video_size)
+
+                # logger.debug(f"[douyin] 下载视频，video_url={download_link}")
+                
 
                 # logger.debug(f"用户: {nickname}, 发布时间: {create_time}\n点赞: {digg_count}, 评论: {comment_count}, 收藏: {collect_count}, 分享: {share_count}\n描述: {desc}\n无水印视频链接：{video_link}\n下载链接：{download_link}")
 
@@ -227,18 +233,23 @@ class DouyinPlugin(Plugin):
                     channel = e_context["channel"]
                     _send(channel, reply, e_context["context"])
 
-                    # 发送压缩视频
+                    # 下载视频
+                    filename = f"{int(time.time())}-{sanitize_filename(desc).replace(' ', '')[:20]}"
+                    video_path = os.path.join(self.assets_dir, f"{filename}.mp4")
+                    self.download_video(e_context, video_link, video_path, video_size)
+
+                    # 发送视频
                     reply = Reply(ReplyType.VIDEO, video_path)
                     _send(channel, reply, e_context["context"])
 
                     e_context.action = EventAction.BREAK_PASS
 
                 else:
-                    reply = Reply(ReplyType.TEXT, "抱歉！无法下载视频，请稍后重试。")
+                    reply = Reply(ReplyType.TEXT, "抱歉！没有找到视频链接，请稍后重试。")
                     e_context["reply"] = reply
                     e_context.action = EventAction.BREAK_PASS
             else:
-                reply = Reply(ReplyType.TEXT, "解析视频失败，请稍后重试。")
+                reply = Reply(ReplyType.TEXT, "抱歉！没有视频信息，请检查视频是否被删除。")
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
         else:
