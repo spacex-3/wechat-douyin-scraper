@@ -1,5 +1,5 @@
 {
-    "api_base_url": "http://192.168.1.101:80/api/hybrid/video_data",
-    "limit_size": 500,
-    "keep_assets_days": 3
+    "api_base_url": "http://192.168.1.101:2333",
+    "limit_size": 100,
+    "keep_assets_days": 1
 }
