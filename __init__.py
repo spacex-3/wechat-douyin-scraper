@@ -1,1 +1,1 @@
-from .plugin import *
+from .DouyinPlugin import *
