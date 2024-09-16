@@ -31,7 +31,7 @@ class DouyinPlugin(Plugin):
             self.config_path = os.path.join(curdir, "config.json")
             # 加载配置文件
             self.config = self.load_config()
-            self.api_base_url = self.config['api_base_url']
+            self.api_base_url = f"{self.config['api_base_url'].rstrip('/')}/api/hybrid/video_data"
             self.assets_dir = Path(curdir) / 'douyin_assets'  # 存储临时文件的路径
             self.assets_dir.mkdir(exist_ok=True)  # 创建文件夹
             logger.debug(f"Assets directory created at: {self.assets_dir}")
@@ -95,7 +95,7 @@ class DouyinPlugin(Plugin):
         logger.debug("所有重试都失败，无法获取抖音视频数据")
         return None
 
-    def download_video(self, e_context, video_url, file_path, video_size, retry_count=3):
+    def download_video(self, e_context, video_url, file_path, video_size, retry_count=5):
         """
         下载视频并确保大小不超过配置的限制
         """
@@ -112,7 +112,7 @@ class DouyinPlugin(Plugin):
         while retry_count >= 0:
             try:
                 # 下载视频并发送
-                response = requests.get(video_url, allow_redirects=True, stream=True, timeout=30)
+                response = requests.get(video_url, allow_redirects=True, stream=True, timeout=200)
                 if response.status_code != 200:
                     raise Exception(f"[douyin] 文件下载失败， status_code={response.status_code}")
                 with open(file_path, 'wb') as f:
@@ -132,7 +132,7 @@ class DouyinPlugin(Plugin):
                 break
         else:
             # 重试次数用尽，发送失败信息
-            reply = Reply(ReplyType.TEXT, "下载视频出错。重试次数已用尽。")            
+            reply = Reply(ReplyType.TEXT, "下载视频出错。请稍后重试")            
             _send(channel, reply, e_context["context"])
             e_context.action = EventAction.BREAK_PASS
 
@@ -199,11 +199,7 @@ class DouyinPlugin(Plugin):
                 else:
                     play_addr = []
 
-                # download_addr 直接从 video 字段中获取
-                # download_addr = video_data.get('video', {}).get('download_addr', {}).get('url_list', [])
-
                 video_link = play_addr[0] if play_addr else None
-                # download_link = download_addr[0] if download_addr else None
 
                 # 获取视频大小，使用 bit_rate 的第一个元素
                 video_size = bit_rate_list[0].get('play_addr', {}).get('data_size', 0) if bit_rate_list else 0
@@ -217,10 +213,15 @@ class DouyinPlugin(Plugin):
                 comment_count = statistics.get('comment_count', 0)
                 collect_count = statistics.get('collect_count', 0)
                 share_count = statistics.get('share_count', 0)
-
-
-                # logger.debug(f"[douyin] 下载视频，video_url={download_link}")
                 
+                
+                # 下载链接处理
+                url_pattern = r'https?://(?:www\.)?douyin\.com/[^\s]+|https?://v\.douyin\.com/[^\s]+'
+                short_match = re.search(url_pattern, text)
+                douyin_short_url = short_match.group(0)
+                download_link = f"{self.config['api_base_url'].rstrip('/')}/api/download?url={douyin_short_url}&prefix=true&with_watermark=false"
+                logger.debug(f"[douyin] 下载视频，video_url={download_link}")
+
 
                 # logger.debug(f"用户: {nickname}, 发布时间: {create_time}\n点赞: {digg_count}, 评论: {comment_count}, 收藏: {collect_count}, 分享: {share_count}\n描述: {desc}\n无水印视频链接：{video_link}\n下载链接：{download_link}")
 
@@ -236,7 +237,7 @@ class DouyinPlugin(Plugin):
                     # 下载视频
                     filename = f"{int(time.time())}-{sanitize_filename(desc).replace(' ', '')[:20]}"
                     video_path = os.path.join(self.assets_dir, f"{filename}.mp4")
-                    self.download_video(e_context, video_link, video_path, video_size)
+                    self.download_video(e_context, download_link, video_path, video_size)
 
                     # 发送视频
                     reply = Reply(ReplyType.VIDEO, video_path)
