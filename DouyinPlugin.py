@@ -142,7 +142,7 @@ class DouyinPlugin(Plugin):
         """
         now = datetime.now()
         keep_days = self.config['keep_assets_days']
-        for file in self.assets_dir.glob('douyin_video_*.mp4'):
+        for file in self.assets_dir.glob('*.mp4'):
             file_time = datetime.fromtimestamp(file.stat().st_mtime)
             if now - file_time > timedelta(days=keep_days):
                 file.unlink()  # 删除文件
