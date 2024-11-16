@@ -171,7 +171,7 @@ class DouyinPlugin(Plugin):
         """
         调用短链接API将长链接转为短链接
         """
-        shorten_api_url = "https://mj.zpika.com/api"  # 你的短链接API URL
+        shorten_api_url = "https://d.zpika.com/api"  # 你的短链接API URL
         payload = {"url": long_url}
 
         try:
@@ -256,7 +256,7 @@ class DouyinPlugin(Plugin):
                     short_video_link = self.shorten_link(video_link)
                     if short_video_link:
                         # 拼接完整的短链接
-                        short_video_link = f"https://mj.zpika.com{short_video_link}"
+                        short_video_link = f"https://d.zpika.com{short_video_link}"
                     else:
                         short_video_link = video_link  # 如果短链接失败，仍然使用长链接
 
